@@ -1,10 +1,11 @@
 import torch
 from torch import nn
+from torchsummary import summary
 
 
 class ShareBlock(nn.Module):
 
-    def __init__(self, in_channels):
+    def __init__(self, in_channels=40):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Conv1d(
@@ -26,12 +27,12 @@ class ShareBlock(nn.Module):
 
 class ShareEncoder(nn.Module):
 
-    def __init__(self, in_channels):
+    def __init__(self, in_channels=40):
         super().__init__()
         self.layers = nn.Sequential(
             ShareBlock(in_channels=in_channels),
-            ShareBlock(in_channels=in_channels),
-            ShareBlock(in_channels=in_channels),
+            ShareBlock(in_channels=256),
+            ShareBlock(in_channels=256),
         )
 
     def forward(self, x):
@@ -44,7 +45,7 @@ class SpeakerEncoder(nn.Module):
         super().__init__()
         self.layers = nn.Sequential(
             nn.LSTM(
-                input_size=256,
+                input_size=512,
                 hidden_size=512,
                 num_layers=2,
                 bidirectional=True,
@@ -52,7 +53,7 @@ class SpeakerEncoder(nn.Module):
             ),
             nn.AdaptiveAvgPool1d(1),
             nn.Linear(
-                in_features=512,
+                in_features=1024,
                 out_features=64,
             ),
         )
@@ -67,7 +68,7 @@ class ContentEncoder(nn.Module):
         super().__init__()
         self.layers = nn.Sequential(
             nn.LSTM(
-                input_size=256,
+                input_size=512,
                 hidden_size=512,
                 num_layers=2,
                 bidirectional=True,
@@ -76,7 +77,7 @@ class ContentEncoder(nn.Module):
             nn.RNN(
                 input_size=512,
                 hidden_size=512,
-                num_layers=2,
+                num_layers=1,
                 batch_first=True,
             ),
             nn.Linear(
@@ -94,9 +95,9 @@ class PreNetBlock(nn.Module):
     def __init__(self, num_features):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.InstanceNorm2d(num_features=num_features),
+            nn.InstanceNorm2d(num_features=512),
             nn.Conv1d(
-                in_channels=num_features,
+                in_channels=512,
                 out_channels=512,
                 kernel_size=5,
                 padding=2,
@@ -115,7 +116,7 @@ class PostNetBlock(nn.Module):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Conv1d(
-                in_channels=in_channels,
+                in_channels=512,
                 out_channels=512,
                 kernel_size=5,
                 padding=2,
@@ -146,15 +147,15 @@ class PreNet(nn.Module):
                 num_features=num_features,
             ),
             nn.LSTM(
-                input_size=256,
+                input_size=512,
                 hidden_size=512,
-                num_layers=2,
+                num_layers=1,
                 batch_first=True,
             ),
             nn.LSTM(
                 input_size=512,
                 hidden_size=1024,
-                num_layers=1,
+                num_layers=2,
                 batch_first=True,
             ),
             nn.Linear(in_features=1024, out_features=80),
@@ -187,6 +188,21 @@ class PostNet(nn.Module):
         return self.layers(x)
 
 
+class Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.share_encoder = ShareEncoder()
+        self.speaker_encoder = SpeakerEncoder()
+        self.content_encoder = ContentEncoder()
+
+    def forward(self, x):
+        z = self.share_encoder(x)
+        z_s = self.speaker_encoder(z)
+        z_c = self.content_encoder(z)
+
+        return z_s, z_c
+
+
 class Decoder(nn.Module):
 
     def __init__(self, num_features):
@@ -210,6 +226,12 @@ class Vocoder(nn.Module):
         super().__init__()
 
 
+class SpeakerPrior: ...
+
+
+class ContentPrior: ...
+
+
 class DSVAE(nn.Module):
 
     def __init__(self, num_features):
@@ -220,15 +242,15 @@ class DSVAE(nn.Module):
         self.decoder = Decoder(num_features)
         self.vocoder = Vocoder()
 
-    def concat(self, speaker_x, content_x):
-        return speaker_x
+    def concat(self, z_s, z_c):
+        return z_s + z_c
 
     def forward(self, x):
-        share_x = self.share_encoder(x)
-        speaker_x = self.speaker_encoder(share_x)
-        content_x = self.content_encoder(share_x)
-        concat_x = self.concat(speaker_x, content_x)
+        z = self.share_encoder(x)
+        z_s = self.speaker_encoder(z)
+        z_c = self.content_encoder(z)
+        concat_x = self.concat(z_s, z_c)
         decoder_x = self.decoder(concat_x)
-        waveform = self.vocoder(decoder_x)
+        spectrogram = self.vocoder(decoder_x)
 
-        return waveform
+        return spectrogram, z_s, z_c
