@@ -162,3 +162,7 @@ cython_debug/
 #.idea/
 
 .DS_Store
+VCTK-Corpus-0.92/
+*.mp3
+*.wav
+*.zip
