@@ -5,7 +5,7 @@ from torchsummary import summary
 
 class ShareBlock(nn.Module):
 
-    def __init__(self, in_channels=40):
+    def __init__(self, in_channels=1):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Conv1d(
@@ -15,7 +15,7 @@ class ShareBlock(nn.Module):
                 padding=2,
                 stride=1,
             ),
-            nn.InstanceNorm2d(
+            nn.InstanceNorm1d(
                 num_features=256,
             ),
             nn.ReLU(),
@@ -27,7 +27,7 @@ class ShareBlock(nn.Module):
 
 class ShareEncoder(nn.Module):
 
-    def __init__(self, in_channels=40):
+    def __init__(self, in_channels=1):
         super().__init__()
         self.layers = nn.Sequential(
             ShareBlock(in_channels=in_channels),
@@ -43,51 +43,70 @@ class SpeakerEncoder(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.layers = nn.Sequential(
-            nn.LSTM(
-                input_size=512,
-                hidden_size=512,
-                num_layers=2,
-                bidirectional=True,
-                batch_first=True,
-            ),
-            nn.AdaptiveAvgPool1d(1),
-            nn.Linear(
-                in_features=1024,
-                out_features=64,
-            ),
+        self.lstm = nn.LSTM(
+            input_size=512,
+            hidden_size=512,
+            num_layers=2,
+            bidirectional=True,
+            batch_first=True,
+        )
+        self.avg_pool = nn.AdaptiveAvgPool1d(1)
+        self.fc = nn.Linear(
+            in_features=1,
+            out_features=64,
         )
 
     def forward(self, x):
-        return self.layers(x)
+        z1, _ = self.lstm(x)
+        z2 = self.avg_pool(z1)
+        z3 = self.fc(z2)
+
+        return z3
 
 
 class ContentEncoder(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.layers = nn.Sequential(
-            nn.LSTM(
-                input_size=512,
-                hidden_size=512,
-                num_layers=2,
-                bidirectional=True,
-                batch_first=True,
-            ),
-            nn.RNN(
-                input_size=512,
-                hidden_size=512,
-                num_layers=1,
-                batch_first=True,
-            ),
-            nn.Linear(
-                in_features=512,
-                out_features=64,
-            ),
+        self.lstm = nn.LSTM(
+            input_size=512,
+            hidden_size=512,
+            num_layers=2,
+            bidirectional=True,
+            batch_first=True,
+        )
+        self.rnn = nn.RNN(
+            input_size=1024,
+            hidden_size=512,
+            num_layers=1,
+            batch_first=True,
+        )
+        self.fc = nn.Linear(
+            in_features=512,
+            out_features=64,
         )
 
     def forward(self, x):
-        return self.layers(x)
+        z1, _ = self.lstm(x)
+        z2, _ = self.rnn(z1)
+        z3 = self.fc(z2)
+
+        return z3
+
+
+class Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.share_encoder = ShareEncoder()
+        self.speaker_encoder = SpeakerEncoder()
+        self.content_encoder = ContentEncoder()
+
+    def forward(self, x):
+        z = self.share_encoder(x)
+        z_s = self.speaker_encoder(z)
+        z_c = self.content_encoder(z)
+
+        return z_s, z_c
 
 
 class PreNetBlock(nn.Module):
@@ -188,21 +207,6 @@ class PostNet(nn.Module):
         return self.layers(x)
 
 
-class Encoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.share_encoder = ShareEncoder()
-        self.speaker_encoder = SpeakerEncoder()
-        self.content_encoder = ContentEncoder()
-
-    def forward(self, x):
-        z = self.share_encoder(x)
-        z_s = self.speaker_encoder(z)
-        z_c = self.content_encoder(z)
-
-        return z_s, z_c
-
-
 class Decoder(nn.Module):
 
     def __init__(self, num_features):
@@ -254,3 +258,14 @@ class DSVAE(nn.Module):
         spectrogram = self.vocoder(decoder_x)
 
         return spectrogram, z_s, z_c
+
+
+def test_model(model, x):
+    output = model(x)
+    if isinstance(output, tuple):
+        print(output[0].shape, output[1].shape)
+    else:
+        print(output.shape)
+
+
+test_model(ShareEncoder(), torch.randn(30, 1, 512))
