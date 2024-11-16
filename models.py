@@ -1,6 +1,30 @@
 import torch
 from torch import nn
-from torchsummary import summary
+
+
+def reparameterize(mean, logvar):
+    std = torch.exp(0.5 * logvar)
+    epsilon = torch.randn_like(std)
+
+    return mean + epsilon * std
+
+
+def kld_with_any(mean_c, logvar_c): ...
+
+
+def kld_with_normal(mean, logvar):
+    return -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
+
+
+def recon_loss(x, recon_x): ...
+
+
+def loss_function(x, recon_x, mean_s, logvar_s, mean_c, logvar_c):
+    return (
+        recon_loss(x, recon_x)
+        + kld_with_normal(mean_s, logvar_s)
+        + kld_with_any(mean_c, logvar_c)
+    )
 
 
 class ShareBlock(nn.Module):
@@ -116,15 +140,7 @@ class Encoder(nn.Module):
         mean_s, logvar_s = self.speaker_encoder(z)
         mean_c, logvar_c = self.content_encoder(z)
 
-        return self.reparameterize(mean_s, logvar_s), self.reparameterize(
-            mean_c, logvar_c
-        )
-
-    def reparameterize(self, mean, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.rand_like(std)
-
-        return mean + eps * std
+        return mean_s, logvar_s, mean_c, logvar_c
 
 
 class PreNetBlock(nn.Module):
@@ -260,12 +276,14 @@ class DSVAE(nn.Module):
         return torch.cat((z_s, z_c), dim=2)
 
     def forward(self, x):
-        z_s, z_c = self.encoder(x)
+        mean_s, logvar_s, mean_c, logvar_c = self.encoder(x)
+        z_s = reparameterize(mean_s, logvar_s)
+        z_c = reparameterize(mean_c, logvar_c)
         concat_x = self.concat(z_s, z_c)
-        decoder_x = self.decoder(concat_x)
+        z = self.decoder(concat_x)
         # spectrogram = self.vocoder(decoder_x)
 
-        return decoder_x, z_s, z_c
+        return z, mean_s, logvar_s, mean_c, logvar_c
 
 
 def test_model(model, x):
@@ -281,4 +299,4 @@ def test_model(model, x):
 # test_model(PreNet(), torch.randn(30, 256, 128))  # -> 30, 512, 80
 # test_model(PostNet(), torch.randn(30, 512, 80))  # -> 30, 512, 80
 # test_model(Decoder(), torch.randn(30, 256, 128)) # -> 30, 1, 80
-test_model(DSVAE(), torch.randn(30, 1, 512))  # -> 30, 1, 80
+# test_model(DSVAE(), torch.randn(30, 1, 512))  # -> 30, 1, 80

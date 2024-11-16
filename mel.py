@@ -1,19 +1,29 @@
 import torch
 import torchaudio
-from torchaudio.transforms import MelSpectrogram
 import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader
+from torchaudio.transforms import MelSpectrogram
 
 dataset = torchaudio.datasets.VCTK_092("./", download=True)
+train_data_loader = DataLoader(dataset, batch_size=128, shuffle=True)
 
-s = set()
 
-print(len(dataset))
+# s = set()
 
-for data in dataset:
-    waveform, sample_rate, _, _, _ = data
-    s.add(waveform.shape)
+# print(len(dataset))
 
-print(s)
+# for data in dataset:
+#     waveform, sample_rate, _, _, _ = data
+#     s.add(waveform.shape)
+
+# d = []
+
+# for ss in s:
+#     d.append(ss[1])
+
+# # print(s)
+
+# print(min(d), max(d))
 
 # waveform, sample_rate, _, _, _ = dataset[0]
 # mel_spectrogram = MelSpectrogram(
