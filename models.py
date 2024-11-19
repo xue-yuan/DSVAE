@@ -2,29 +2,14 @@ import torch
 from torch import nn
 
 
+LENGTH = 794730
+
+
 def reparameterize(mean, logvar):
     std = torch.exp(0.5 * logvar)
     epsilon = torch.randn_like(std)
 
     return mean + epsilon * std
-
-
-def kld_with_any(mean_c, logvar_c): ...
-
-
-def kld_with_normal(mean, logvar):
-    return -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
-
-
-def recon_loss(x, recon_x): ...
-
-
-def loss_function(x, recon_x, mean_s, logvar_s, mean_c, logvar_c):
-    return (
-        recon_loss(x, recon_x)
-        + kld_with_normal(mean_s, logvar_s)
-        + kld_with_any(mean_c, logvar_c)
-    )
 
 
 class ShareBlock(nn.Module):
@@ -68,7 +53,7 @@ class SpeakerEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.lstm = nn.LSTM(
-            input_size=512,
+            input_size=LENGTH,
             hidden_size=512,
             num_layers=2,
             bidirectional=True,
@@ -76,17 +61,19 @@ class SpeakerEncoder(nn.Module):
         )
         self.avg_pool = nn.AdaptiveAvgPool1d(1)
         self.fc_mean = nn.Linear(
-            in_features=1,
-            out_features=64,
+            in_features=1024,
+            out_features=50,
         )
         self.fc_logvar = nn.Linear(
-            in_features=1,
-            out_features=64,
+            in_features=1024,
+            out_features=50,
         )
 
     def forward(self, x):
         z1, _ = self.lstm(x)
+        z1 = z1.transpose(1, 2)
         z2 = self.avg_pool(z1)
+        z2 = z2.squeeze(-1)
         mean = self.fc_mean(z2)
         logvar = self.fc_logvar(z2)
 
@@ -98,7 +85,7 @@ class ContentEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.lstm = nn.LSTM(
-            input_size=512,
+            input_size=LENGTH,
             hidden_size=512,
             num_layers=2,
             bidirectional=True,
@@ -112,16 +99,17 @@ class ContentEncoder(nn.Module):
         )
         self.fc_mean = nn.Linear(
             in_features=512,
-            out_features=64,
+            out_features=50,
         )
         self.fc_logvar = nn.Linear(
             in_features=512,
-            out_features=64,
+            out_features=50,
         )
 
     def forward(self, x):
         z1, _ = self.lstm(x)
         z2, _ = self.rnn(z1)
+        z2 = z2.mean(dim=1)
         mean = self.fc_mean(z2)
         logvar = self.fc_logvar(z2)
 
@@ -258,12 +246,6 @@ class Vocoder(nn.Module):
         return x
 
 
-class SpeakerPrior: ...
-
-
-class ContentPrior: ...
-
-
 class DSVAE(nn.Module):
 
     def __init__(self):
@@ -295,8 +277,8 @@ def test_model(model, x):
         print(output.shape)
 
 
-# test_model(Encoder(), torch.randn(30, 1, 512)) # -> 30, 256, 64
+test_model(Encoder(), torch.randn(1, 1, LENGTH))  # -> 30, 256, 64
 # test_model(PreNet(), torch.randn(30, 256, 128))  # -> 30, 512, 80
 # test_model(PostNet(), torch.randn(30, 512, 80))  # -> 30, 512, 80
 # test_model(Decoder(), torch.randn(30, 256, 128)) # -> 30, 1, 80
-# test_model(DSVAE(), torch.randn(30, 1, 512))  # -> 30, 1, 80
+# test_model(DSVAE(), torch.randn(2, 1, LENGTH))  # -> 30, 1, 80

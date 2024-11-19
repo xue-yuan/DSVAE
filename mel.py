@@ -6,24 +6,40 @@ from torchaudio.transforms import MelSpectrogram
 
 dataset = torchaudio.datasets.VCTK_092("./", download=True)
 train_data_loader = DataLoader(dataset, batch_size=128, shuffle=True)
+waveform, sample_rate, _, _, _ = dataset[0]
+
+# print(sample_rate, waveform.shape[1])
 
 
-# s = set()
+def find_max_length(dataset):
+    max_length = 0
+    for i in range(len(dataset)):
+        waveform, _, _, _, _ = dataset[i]
+        max_length = max(max_length, waveform.shape[1])
+    return max_length
+
+
+# print(find_max_length(dataset))
+
+s = set()
 
 # print(len(dataset))
 
-# for data in dataset:
-#     waveform, sample_rate, _, _, _ = data
-#     s.add(waveform.shape)
+for data in dataset:
+    waveform, sample_rate, _, _, _ = data
 
-# d = []
+    s.add(waveform.shape[1] / sample_rate)
+
+    # s.add(waveform.shape)
+
+d = []
 
 # for ss in s:
 #     d.append(ss[1])
 
-# # print(s)
+# print(s)
 
-# print(min(d), max(d))
+print(min(s), max(s))
 
 # waveform, sample_rate, _, _, _ = dataset[0]
 # mel_spectrogram = MelSpectrogram(
