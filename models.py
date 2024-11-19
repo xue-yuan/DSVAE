@@ -1,5 +1,3 @@
-import librosa
-import numpy as np
 import torch
 from torch import nn
 
@@ -12,26 +10,6 @@ def reparameterize(mean, logvar):
     epsilon = torch.randn_like(std)
 
     return mean + epsilon * std
-
-
-
-
-def kld_with_any(mean_c, logvar_c): ...
-
-
-def kld_with_normal(mean, logvar):
-    return -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
-
-
-def recon_loss(x, recon_x): ...
-
-
-def loss_function(x, recon_x, mean_s, logvar_s, mean_c, logvar_c):
-    return (
-        recon_loss(x, recon_x)
-        + kld_with_normal(mean_s, logvar_s)
-        + kld_with_any(mean_c, logvar_c)
-    )
 
 
 class ShareBlock(nn.Module):
