@@ -1,5 +1,5 @@
 # Load model directly
-from transformers import Wav2Vec2Config, Wav2Vec2Model, Wav2Vec2Processor
+from transformers import Wav2Vec2Model, Wav2Vec2Processor
 from sklearn.cluster import KMeans
 import numpy as np
 import torch
