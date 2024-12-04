@@ -1,29 +1,33 @@
 import numpy as np
 import librosa
 from sklearn.metrics.pairwise import cosine_similarity
+import torch
+import torch.nn.functional as F
 
 
 def melspectrogram_cosine_similarity(mel1, mel2):
-    mel_1 = np.array(mel1)
-    mel_2 = np.array(mel2)
 
-    log_mel1 = librosa.power_to_db(mel_1, ref=np.max)
-    log_mel2 = librosa.power_to_db(mel_2, ref=np.max)
+    mel1 = torch.tensor(mel1, dtype=torch.float32)
+    mel2 = torch.tensor(mel2, dtype=torch.float32)
 
-    vector1 = log_mel1.flatten().reshape(1, -1)
-    vector2 = log_mel2.flatten().reshape(1, -1)
+    log_mel1 = torch.log10(mel1 + 1e-8)
+    log_mel2 = torch.log10(mel2 + 1e-8)
 
-    similarity = cosine_similarity(vector1, vector2)
+    vector1 = log_mel1.flatten()
+    vector2 = log_mel2.flatten()
+
+    similarity = F.cosine_similarity(vector1.unsqueeze(0), vector2.unsqueeze(0))
 
     return similarity
 
 
 def melspectrogram_mse(mel1, mel2):
-    mel_1 = np.array(mel1)
-    mel_2 = np.array(mel2)
 
-    log_mel1 = librosa.power_to_db(mel_1, ref=np.max)
-    log_mel2 = librosa.power_to_db(mel_2, ref=np.max)
+    mel1 = torch.tensor(mel1, dtype=torch.float32)
+    mel2 = torch.tensor(mel2, dtype=torch.float32)
+    
+    log_mel1 = torch.log10(mel1 + 1e-8)
+    log_mel2 = torch.log10(mel2 + 1e-8)
 
     min_shape = (
         min(log_mel1.shape[0], log_mel2.shape[0]),
@@ -32,6 +36,6 @@ def melspectrogram_mse(mel1, mel2):
     log_mel1 = log_mel1[: min_shape[0], : min_shape[1]]
     log_mel2 = log_mel2[: min_shape[0], : min_shape[1]]
 
-    mse = np.mean((log_mel1 - log_mel2) ** 2)
+    mse = F.mse_loss(log_mel1, log_mel2)
 
     return mse

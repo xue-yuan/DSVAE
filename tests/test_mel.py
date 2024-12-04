@@ -30,7 +30,7 @@ if __name__ == '__main__':
     show_melspectrogram(mel_2, sr2, title="Mel Spectrogram 2")
 
     similarity = melspectrogram_cosine_similarity(mel_1, mel_2)
-    print(f"Cosine similarity: {similarity[0][0]}")
+    print(f"Cosine similarity: {similarity.item()}")
 
     mse = melspectrogram_mse(mel_1, mel_2)
-    print(f"mean squared error: {mse}")
+    print(f"mean squared error: {mse.item()}")
