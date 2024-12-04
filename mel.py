@@ -10,6 +10,15 @@ waveform, sample_rate, _, _, _ = dataset[0]
 
 # print(sample_rate, waveform.shape[1])
 
+print(len(dataset))
+
+s = set()
+for i in range(len(dataset)):
+    waveform, _, _, _, _ = dataset[i]
+    s.add(waveform.shape[0])
+
+print(s)
+
 
 def find_max_length(dataset):
     max_length = 0
@@ -21,33 +30,36 @@ def find_max_length(dataset):
 
 # print(find_max_length(dataset))
 
-s = set()
+# s = set()
 
 # print(len(dataset))
 
-for data in dataset:
-    waveform, sample_rate, _, _, _ = data
+# for data in dataset:
+#     waveform, sample_rate, _, _, _ = data
 
-    s.add(waveform.shape[1] / sample_rate)
+#     s.add(waveform.shape[1] / sample_rate)
 
-    # s.add(waveform.shape)
+# s.add(waveform.shape)
 
-d = []
+# d = []
 
 # for ss in s:
 #     d.append(ss[1])
 
 # print(s)
 
-print(min(s), max(s))
+# print(min(s), max(s))
 
 # waveform, sample_rate, _, _, _ = dataset[0]
 # mel_spectrogram = MelSpectrogram(
 #     sample_rate=sample_rate,
 # )
-# mel_spec = mel_spectrogram(waveform)
-# mel_spec_db = torchaudio.transforms.AmplitudeToDB()(mel_spec)
-# print(waveform.shape)
+mel_spectrogram = MelSpectrogram(
+    sample_rate=sample_rate,
+)(waveform)
+print(mel_spectrogram.shape)
+mel_spec_db = torchaudio.transforms.AmplitudeToDB()(mel_spectrogram)
+print(mel_spec_db.shape)
 
 # plt.figure(figsize=(10, 4))
 # plt.imshow(mel_spec_db[0].numpy(), aspect="auto", origin="lower", cmap="viridis")
