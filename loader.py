@@ -21,7 +21,7 @@ def to_melspectrogram(waveform, sr):
     )
 
 
-def collate_function(batch, fixed_length):
+def collate_function(batch, fixed_length=819100):
     sample_rates = [item[1] for item in batch]
     padded_waveforms = torch.stack(
         [
