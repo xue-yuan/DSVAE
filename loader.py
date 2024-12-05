@@ -16,9 +16,9 @@ def to_melspectrogram(waveform, sr):
     return torchaudio.transforms.AmplitudeToDB()(
         MelSpectrogram(
             sample_rate=sr,
-            n_mels=30,
+            n_mels=32,
         )(waveform)
-    )[0]
+    )
 
 
 def collate_function(batch, fixed_length):

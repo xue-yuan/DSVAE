@@ -167,3 +167,4 @@ VCTK-Corpus-0.92/
 *.wav
 *.zip
 vctk/
+.vscode/

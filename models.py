@@ -2,9 +2,6 @@ import torch
 from torch import nn
 
 
-LENGTH = 794730
-
-
 def reparameterize(mean, logvar):
     std = torch.exp(0.5 * logvar)
     epsilon = torch.randn_like(std)
@@ -17,14 +14,14 @@ class ShareBlock(nn.Module):
     def __init__(self, in_channels=1):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Conv1d(
+            nn.Conv2d(
                 in_channels=in_channels,
                 out_channels=256,
                 kernel_size=5,
                 padding=2,
                 stride=1,
             ),
-            nn.InstanceNorm1d(
+            nn.InstanceNorm2d(
                 num_features=256,
             ),
             nn.ReLU(),
@@ -53,7 +50,7 @@ class SpeakerEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.lstm = nn.LSTM(
-            input_size=LENGTH,
+            input_size=32 * 256,
             hidden_size=512,
             num_layers=2,
             bidirectional=True,
@@ -62,11 +59,11 @@ class SpeakerEncoder(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool1d(1)
         self.fc_mean = nn.Linear(
             in_features=1024,
-            out_features=50,
+            out_features=64,
         )
         self.fc_logvar = nn.Linear(
             in_features=1024,
-            out_features=50,
+            out_features=64,
         )
 
     def forward(self, x):
@@ -85,7 +82,7 @@ class ContentEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.lstm = nn.LSTM(
-            input_size=LENGTH,
+            input_size=32 * 256,
             hidden_size=512,
             num_layers=2,
             bidirectional=True,
@@ -99,11 +96,11 @@ class ContentEncoder(nn.Module):
         )
         self.fc_mean = nn.Linear(
             in_features=512,
-            out_features=50,
+            out_features=64,
         )
         self.fc_logvar = nn.Linear(
             in_features=512,
-            out_features=50,
+            out_features=64,
         )
 
     def forward(self, x):
@@ -125,6 +122,8 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         z = self.share_encoder(x)
+        z = z.permute(0, 3, 1, 2)
+        z = z.reshape(z.shape[0], z.shape[1], -1)
         mean_s, logvar_s = self.speaker_encoder(z)
         mean_c, logvar_c = self.content_encoder(z)
 
@@ -133,7 +132,7 @@ class Encoder(nn.Module):
 
 class PreNetBlock(nn.Module):
 
-    def __init__(self, in_channels=256):
+    def __init__(self, in_channels=1):
         super().__init__()
         self.layers = nn.Sequential(
             nn.InstanceNorm1d(num_features=in_channels),
@@ -198,7 +197,7 @@ class PreNet(nn.Module):
             num_layers=2,
             batch_first=True,
         )
-        self.fc = nn.Linear(in_features=1024, out_features=80)
+        self.fc = nn.Linear(in_features=1024, out_features=128)
 
     def forward(self, x):
         z1 = self.layers(x)
@@ -217,7 +216,7 @@ class PostNet(nn.Module):
             PostNetBlock(),
             PostNetBlock(),
             PostNetBlock(),
-            PostNetBlock(1),
+            PostNetBlock(),
         )
 
     def forward(self, x):
@@ -228,13 +227,40 @@ class Decoder(nn.Module):
 
     def __init__(self):
         super().__init__()
+
+        self.prenet = PreNet()
+        self.postnet = PostNet()
         self.layers = nn.Sequential(
-            PreNet(),
-            PostNet(),
+            nn.ConvTranspose2d(
+                in_channels=512,
+                out_channels=256,
+                kernel_size=4,
+                stride=(1, 4),
+            ),
+            nn.ReLU(),
+            nn.ConvTranspose2d(
+                in_channels=256,
+                out_channels=128,
+                kernel_size=4,
+                stride=(4, 4),
+            ),
+            nn.ReLU(),
+            nn.ConvTranspose2d(
+                in_channels=128,
+                out_channels=1,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+            ),
+            nn.ReLU(),
         )
 
     def forward(self, x):
-        return self.layers(x)
+        z = self.prenet(x)
+        z = self.postnet(z)
+        z = z.view(z.shape[0], z.shape[1], 1, 128)
+        z = self.layers(z)
+        return z
 
 
 class Vocoder(nn.Module):
@@ -252,18 +278,17 @@ class DSVAE(nn.Module):
         super().__init__()
         self.encoder = Encoder()
         self.decoder = Decoder()
-        self.vocoder = Vocoder()
 
     def concat(self, z_s, z_c):
-        return torch.cat((z_s, z_c), dim=2)
+        return torch.cat((z_s, z_c), dim=1)
 
     def forward(self, x):
         mean_s, logvar_s, mean_c, logvar_c = self.encoder(x)
         z_s = reparameterize(mean_s, logvar_s)
         z_c = reparameterize(mean_c, logvar_c)
         concat_x = self.concat(z_s, z_c)
+        concat_x = concat_x.unsqueeze(1)
         z = self.decoder(concat_x)
-        # spectrogram = self.vocoder(decoder_x)
 
         return z, mean_s, logvar_s, mean_c, logvar_c
 
@@ -271,14 +296,183 @@ class DSVAE(nn.Module):
 def test_model(model, x):
     output = model(x)
     if isinstance(output, tuple):
-        for i in range(len(output)):
-            print(f"{i}:", output[i].shape)
+        outputs = []
+        for o in output:
+            outputs.append(o.shape)
+
+        return outputs
     else:
-        print(output.shape)
+        return output.shape
 
 
-test_model(Encoder(), torch.randn(1, 1, LENGTH))  # -> 30, 256, 64
-# test_model(PreNet(), torch.randn(30, 256, 128))  # -> 30, 512, 80
-# test_model(PostNet(), torch.randn(30, 512, 80))  # -> 30, 512, 80
-# test_model(Decoder(), torch.randn(30, 256, 128)) # -> 30, 1, 80
-# test_model(DSVAE(), torch.randn(2, 1, LENGTH))  # -> 30, 1, 80
+batch_size = 2
+input_channel = 1
+input_height = 32
+input_width = 4096
+
+
+def test_share_encoder():
+    o = test_model(
+        ShareEncoder(),
+        torch.randn(batch_size, input_channel, input_height, input_width),
+    )
+
+    print(o)
+
+    assert o[0] == batch_size
+    assert o[1] == 256
+    assert o[2] == input_height
+    assert o[3] == input_width
+
+
+def test_speaker_encoder():
+    z = torch.randn(batch_size, 256, input_height, input_width)
+    z = z.permute(0, 3, 1, 2)
+    z = z.reshape(z.shape[0], z.shape[1], -1)
+    o = test_model(
+        SpeakerEncoder(),
+        z,
+    )
+
+    print(o)
+
+    assert o[0][0] == batch_size
+    assert o[0][1] == 64
+    assert o[1][0] == batch_size
+    assert o[1][1] == 64
+
+
+def test_content_encoder():
+    z = torch.randn(batch_size, 256, input_height, input_width)
+    z = z.permute(0, 3, 1, 2)
+    z = z.reshape(z.shape[0], z.shape[1], -1)
+    o = test_model(
+        ContentEncoder(),
+        z,
+    )
+
+    print(o)
+
+    assert o[0][0] == batch_size
+    assert o[0][1] == 64
+    assert o[1][0] == batch_size
+    assert o[1][1] == 64
+
+
+def test_encoder():
+    o = test_model(
+        Encoder(),
+        torch.randn(batch_size, input_channel, input_height, input_width),
+    )
+
+    print(o)
+
+    assert o[0][0] == batch_size
+    assert o[0][1] == 64
+    assert o[1][0] == batch_size
+    assert o[1][1] == 64
+    assert o[2][0] == batch_size
+    assert o[2][1] == 64
+    assert o[3][0] == batch_size
+    assert o[3][1] == 64
+
+
+def test_pre_net_block():
+    o = test_model(
+        PreNetBlock(),
+        torch.randn(batch_size, input_channel, 128),
+    )
+
+    print(o)
+
+    assert o[0] == batch_size
+    assert o[1] == 512
+    assert o[2] == 128
+
+
+def test_pre_net():
+    o = test_model(
+        PreNet(),
+        torch.randn(batch_size, input_channel, 128),
+    )
+
+    print(o)
+
+    assert o[0] == batch_size
+    assert o[1] == 512
+    assert o[2] == 128
+
+
+def test_post_net_block():
+    o = test_model(
+        PostNetBlock(),
+        torch.randn(batch_size, 512, 128),
+    )
+
+    print(o)
+
+    assert o[0] == batch_size
+    assert o[1] == 512
+    assert o[2] == 128
+
+
+def test_post_net():
+    o = test_model(
+        PostNet(),
+        torch.randn(batch_size, 512, 128),
+    )
+
+    print(o)
+
+    assert o[0] == batch_size
+    assert o[1] == 512
+    assert o[2] == 128
+
+
+def test_decoder():
+    o = test_model(
+        Decoder(),
+        torch.randn(batch_size, input_channel, 128),
+    )
+
+    print(o)
+
+    assert o[0] == batch_size
+    assert o[1] == input_channel
+    assert o[2] == input_height
+    assert o[3] == input_width
+
+
+def test_dsvae():
+    o = test_model(
+        DSVAE(),
+        torch.randn(batch_size, input_channel, input_height, input_width),
+    )
+
+    print(o)
+
+    assert o[0][0] == batch_size
+    assert o[0][1] == input_channel
+    assert o[0][2] == input_height
+    assert o[0][3] == input_width
+
+    assert o[1][0] == batch_size
+    assert o[1][1] == 64
+    assert o[2][0] == batch_size
+    assert o[2][1] == 64
+    assert o[3][0] == batch_size
+    assert o[3][1] == 64
+    assert o[4][0] == batch_size
+    assert o[4][1] == 64
+
+
+# test_share_encoder()
+# test_speaker_encoder()
+# test_content_encoder()
+# test_encoder()
+# test_pre_net_block()
+# test_pre_net()
+# test_post_net_block()
+# test_post_net()
+# test_decoder()
+test_dsvae()
