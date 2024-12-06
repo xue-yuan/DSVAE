@@ -18,49 +18,27 @@ waveform_2 = hifi_gan.decode_batch(mel_output)
 torchaudio.save('ganlinlaoshi.wav', waveform_2.squeeze(1), 22050)
 
 
-def mel_to_wave(mel):
+def mel_to_wave(mels):
+
+    # convert input to tensor
+    if isinstance(mels, list):
+        mels = [torch.tensor(mel, dtype=torch.float32) if isinstance(mel, np.ndarray) else mel for mel in mels]
+        mels = torch.stack(mels)
+    elif isinstance(mels, np.ndarray):
+        mels = torch.tensor(mels, dtype=torch.float32)
+
+    mels = mels.to(torch.float32)
     
-    if isinstance(mel, np.ndarray):
-        mel = torch.tensor(mel)
+    # this means input is a single mel
+    if mels.ndimension() == 2:
+        mels = mels.unsqueeze(0)
 
-    mel = mel.to(torch.float32)
+    # HIFIGAN requires mel's chanel to be 80
+    if mels.size(1) != 80:  
+        mels = mels[:80, :]
 
-    if mel.size(0) != 80:  # 如果頻道數不是 80，進行調整
-        # 切片，只取前 80 個 mel 頻帶
-        mel = mel[:80, :]
-
-    mel = mel.unsqueeze(0) if mel.ndimension() == 2 else mel
     
-    wave_form = hifi_gan.decode_batch(mel)
+    waveforms = hifi_gan.decode_batch(mels)  
 
-    return wave_form 
-#load audio file
-# signal, rate = torchaudio.load('speechbrain/tts-hifigan-ljspeech/example.wav')
-
-
-# Compute mel spectrogram, have to use these specific parameters
-# spectrogram, _ = mel_spectogram(
-#     audio=signal.squeeze(),
-#     sample_rate=22050,
-#     hop_length=256,
-#     win_length=None,
-#     n_mels=80,
-#     n_fft=1024,
-#     f_min=0.0,
-#     f_max=8000.0,
-#     power=1,
-#     normalized=False,
-#     min_max_energy_norm=True,
-#     norm="slaney",
-#     mel_scale="slaney",
-#     compression=True
-# )
-# generate random mel_spec
-
-# mel_spec = torch.rand(2, 80, 298)
-
-# convert the melspetroram to wavefrom
-# waveforms = hifi_gan.decode_batch(mel_spec)
-
-# torchaudio.save('waveform-reconstructed.wav', waveforms.squeeze(1), 22050)
-
+    waveforms = [wf.unsqueeze(0) if wf.ndimension() == 1 else wf for wf in waveforms]
+    return waveforms 
