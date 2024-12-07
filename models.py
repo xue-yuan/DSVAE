@@ -237,14 +237,14 @@ class Decoder(nn.Module):
                 kernel_size=4,
                 stride=(1, 4),
             ),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(
                 in_channels=256,
                 out_channels=128,
                 kernel_size=4,
                 stride=(4, 4),
             ),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(
                 in_channels=128,
                 out_channels=1,
@@ -252,7 +252,6 @@ class Decoder(nn.Module):
                 stride=2,
                 padding=1,
             ),
-            nn.ReLU(),
         )
 
     def forward(self, x):
@@ -278,16 +277,22 @@ class DSVAE(nn.Module):
         super().__init__()
         self.encoder = Encoder()
         self.decoder = Decoder()
+        self.mean_s = 0
+        self.logvar_s = 0
+        self.mean_c = 0
+        self.logvar_c = 0
+        self.z_s = 0
+        self.z_c = 0
 
     def concat(self, z_s, z_c):
         return torch.cat((z_s, z_c), dim=1)
 
     def forward(self, x):
-        mean_s, logvar_s, mean_c, logvar_c = self.encoder(x)
-        z_s = reparameterize(mean_s, logvar_s)
-        z_c = reparameterize(mean_c, logvar_c)
-        concat_x = self.concat(z_s, z_c)
+        self.mean_s, self.logvar_s, self.mean_c, self.logvar_c = self.encoder(x)
+        self.z_s = reparameterize(self.mean_s, self.logvar_s)
+        self.z_c = reparameterize(self.mean_c, self.logvar_c)
+        concat_x = self.concat(self.z_s, self.z_c)
         concat_x = concat_x.unsqueeze(1)
         z = self.decoder(concat_x)
 
-        return z, mean_s, logvar_s, mean_c, logvar_c
+        return z, self.mean_s, self.logvar_s, self.mean_c, self.logvar_c

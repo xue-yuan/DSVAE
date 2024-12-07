@@ -168,3 +168,7 @@ VCTK-Corpus-0.92/
 *.zip
 vctk/
 .vscode/
+*.pth
+
+./pretrained_models
+./tmpdir_tts
