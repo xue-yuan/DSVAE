@@ -170,5 +170,5 @@ vctk/
 .vscode/
 *.pth
 
-./pretrained_models
-./tmpdir_tts
+pretrained_models/
+tmpdir_tts/
