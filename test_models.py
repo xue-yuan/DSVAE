@@ -5,6 +5,7 @@ from models import PreNetBlock, PreNet
 from models import PostNetBlock, PostNet
 from models import Encoder, Decoder
 from models import DSVAE
+from teacherstudent.models import StudentDSVAE1, StudentDSVAE2
 
 
 def test_model(model, x):
@@ -180,6 +181,52 @@ def test_dsvae():
     assert o[4][1] == 64
 
 
+def test_student_dsvae1():
+    o = test_model(
+        StudentDSVAE1(),
+        torch.randn(batch_size, input_channel, input_height, input_width),
+    )
+
+    print(o)
+
+    assert o[0][0] == batch_size
+    assert o[0][1] == input_channel
+    assert o[0][2] == input_height
+    assert o[0][3] == input_width
+
+    assert o[1][0] == batch_size
+    assert o[1][1] == 64
+    assert o[2][0] == batch_size
+    assert o[2][1] == 64
+    assert o[3][0] == batch_size
+    assert o[3][1] == 64
+    assert o[4][0] == batch_size
+    assert o[4][1] == 64
+
+
+def test_student_dsvae2():
+    o = test_model(
+        StudentDSVAE2(),
+        torch.randn(batch_size, input_channel, input_height, input_width),
+    )
+
+    print(o)
+
+    assert o[0][0] == batch_size
+    assert o[0][1] == input_channel
+    assert o[0][2] == input_height
+    assert o[0][3] == input_width
+
+    assert o[1][0] == batch_size
+    assert o[1][1] == 64
+    assert o[2][0] == batch_size
+    assert o[2][1] == 64
+    assert o[3][0] == batch_size
+    assert o[3][1] == 64
+    assert o[4][0] == batch_size
+    assert o[4][1] == 64
+
+
 # test_share_encoder()
 # test_speaker_encoder()
 # test_content_encoder()
@@ -189,4 +236,6 @@ def test_dsvae():
 # test_post_net_block()
 # test_post_net()
 # test_decoder()
-test_dsvae()
+# test_dsvae()
+test_student_dsvae1()
+# test_student_dsvae2()
