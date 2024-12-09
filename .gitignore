@@ -172,3 +172,5 @@ vctk/
 
 pretrained_models/
 tmpdir_tts/
+test.ipynb
+*.png

@@ -20,6 +20,7 @@ numba = "^0.60.0"
 librosa = "^0.10.2.post1"
 speechbrain = "^1.0.2"
 ipykernel = "^6.29.5"
+torchinfo = "^1.8.0"
 
 
 [tool.poetry.group.dev.dependencies]

@@ -9,7 +9,7 @@ def reparameterize(mean, logvar):
     return mean + epsilon * std
 
 
-class StudentEncoder1(nn.Module):
+class StudentEncoder(nn.Module):
 
     def __init__(self):
         super().__init__()
@@ -40,40 +40,40 @@ class StudentEncoder1(nn.Module):
 
         self.speaker_lstm = nn.LSTM(
             input_size=32 * 256,
-            hidden_size=512,
+            hidden_size=128,
             num_layers=2,
             bidirectional=True,
             batch_first=True,
         )
         self.speaker_avg_pool = nn.AdaptiveAvgPool1d(1)
         self.speaker_fc_mean = nn.Linear(
-            in_features=1024,
+            in_features=256,
             out_features=64,
         )
         self.speaker_fc_logvar = nn.Linear(
-            in_features=1024,
+            in_features=256,
             out_features=64,
         )
 
         self.content_lstm = nn.LSTM(
             input_size=32 * 256,
-            hidden_size=512,
+            hidden_size=128,
             num_layers=2,
             bidirectional=True,
             batch_first=True,
         )
         self.content_rnn = nn.RNN(
-            input_size=1024,
-            hidden_size=512,
+            input_size=256,
+            hidden_size=256,
             num_layers=1,
             batch_first=True,
         )
         self.content_fc_mean = nn.Linear(
-            in_features=512,
+            in_features=256,
             out_features=64,
         )
         self.content_fc_logvar = nn.Linear(
-            in_features=512,
+            in_features=256,
             out_features=64,
         )
 
@@ -98,31 +98,48 @@ class StudentEncoder1(nn.Module):
         return speaker_mean, speaker_logvar, content_mean, content_logvar
 
 
-class StudentDecoder1(nn.Module):
+class StudentDecoder(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.fc = nn.Linear(128, 128 * 16 * 2048)
         self.layers = nn.Sequential(
             nn.ConvTranspose2d(
-                128, 64, kernel_size=3, stride=2, padding=1, output_padding=(1, 1)
+                in_channels=512,
+                out_channels=256,
+                kernel_size=4,
+                stride=(1, 4),
             ),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 1, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(
+                in_channels=256,
+                out_channels=128,
+                kernel_size=4,
+                stride=(4, 4),
+            ),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(
+                in_channels=128,
+                out_channels=1,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+            ),
         )
 
     def forward(self, x):
-        x = self.fc(x)
-        x = x.view(x.size(0), 128, 16, 2048)
-        return self.layers(x)
+        z = x.unsqueeze(2)
+        z = z.expand(-1, 512, -1, -1)
+        z = self.layers(z)
+
+        return z
 
 
-class StudentDSVAE1(nn.Module):
+class StudentDSVAE(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.encoder = StudentEncoder1()
-        self.decoder = StudentDecoder1()
+        self.encoder = StudentEncoder()
+        self.decoder = StudentDecoder()
         self.mean_s = 0
         self.logvar_s = 0
         self.mean_c = 0

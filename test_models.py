@@ -1,11 +1,12 @@
 import torch
+from torchinfo import summary
 
 from models import ShareEncoder, SpeakerEncoder, ContentEncoder
 from models import PreNetBlock, PreNet
 from models import PostNetBlock, PostNet
 from models import Encoder, Decoder
 from models import DSVAE
-from teacherstudent.models import StudentDSVAE1, StudentDSVAE2
+from teacherstudent.models import StudentDSVAE, StudentDSVAE2
 
 
 def test_model(model, x):
@@ -183,7 +184,7 @@ def test_dsvae():
 
 def test_student_dsvae1():
     o = test_model(
-        StudentDSVAE1(),
+        StudentDSVAE(),
         torch.randn(batch_size, input_channel, input_height, input_width),
     )
 
@@ -237,5 +238,5 @@ def test_student_dsvae2():
 # test_post_net()
 # test_decoder()
 # test_dsvae()
-test_student_dsvae1()
+# test_student_dsvae1()
 # test_student_dsvae2()
